@@ -1,28 +1,22 @@
 from __future__ import annotations
 
 import json
-import os
 import re
-import uuid
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import streamlit as st
 import streamlit.components.v1 as components
-from supabase import create_client, Client
 
 APP_ROOT = Path(__file__).parent
 EBOOKS_DIR = APP_ROOT / "ebooks"
 COMPONENT_DIR = APP_ROOT / "components" / "highlight_reader"
+DATA_DIR = APP_ROOT / "data"
+DATA_FILE = DATA_DIR / "highlights_store.json"
 
-st.set_page_config(page_title="Leitor Med", page_icon="📚", layout="wide")
+st.set_page_config(page_title="Ebook Internato", page_icon="📚", layout="wide")
 
 highlight_reader = components.declare_component("highlight_reader", path=str(COMPONENT_DIR))
-
-
-# ---------------------------
-# Utilidades
-# ---------------------------
 
 AREA_LABELS = {
     "pediatria": "Pediatria",
@@ -58,8 +52,7 @@ def list_html_files(area: str) -> List[Path]:
 
 
 def document_id(area: str, file_path: Path) -> str:
-    # Identificador estável dos destaques.
-    # Evite renomear/mover o arquivo depois que começar a destacar.
+    # Identificador do documento. Evite renomear/mover o HTML depois de destacar.
     return f"{area}/{file_path.name}"
 
 
@@ -67,99 +60,59 @@ def read_html(file_path: Path) -> str:
     return file_path.read_text(encoding="utf-8", errors="replace")
 
 
-def get_secret(name: str, default: Optional[str] = None) -> Optional[str]:
+def ensure_data_file() -> None:
+    DATA_DIR.mkdir(exist_ok=True)
+    if not DATA_FILE.exists():
+        DATA_FILE.write_text("{}", encoding="utf-8")
+
+
+def read_store() -> Dict[str, List[Dict[str, Any]]]:
+    ensure_data_file()
     try:
-        return st.secrets.get(name, default)
+        data = json.loads(DATA_FILE.read_text(encoding="utf-8"))
+        return data if isinstance(data, dict) else {}
     except Exception:
-        return default
+        return {}
 
 
-@st.cache_resource
-def get_supabase() -> Optional[Client]:
-    url = get_secret("SUPABASE_URL")
-    key = get_secret("SUPABASE_KEY")
-    if not url or not key:
-        return None
-    return create_client(url, key)
+def write_store(store: Dict[str, List[Dict[str, Any]]]) -> None:
+    ensure_data_file()
+    DATA_FILE.write_text(json.dumps(store, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
-def load_highlights(doc_id: str, user_key: str) -> List[Dict[str, Any]]:
-    supabase = get_supabase()
-    if not supabase:
-        return []
+def load_highlights(doc_id: str) -> List[Dict[str, Any]]:
+    store = read_store()
+    highlights = store.get(doc_id, [])
+    return highlights if isinstance(highlights, list) else []
 
+
+def save_highlights(doc_id: str, highlights: List[Dict[str, Any]]) -> bool:
     try:
-        response = (
-            supabase.table("highlights")
-            .select("payload")
-            .eq("user_key", user_key)
-            .eq("document_id", doc_id)
-            .execute()
-        )
-        rows = response.data or []
-        if not rows:
-            return []
-        payload = rows[0].get("payload") or []
-        if isinstance(payload, str):
-            return json.loads(payload)
-        return payload
-    except Exception as e:
-        st.warning(f"Não consegui carregar os destaques do Supabase: {e}")
-        return []
-
-
-def save_highlights(doc_id: str, user_key: str, highlights: List[Dict[str, Any]]) -> bool:
-    supabase = get_supabase()
-    if not supabase:
-        return False
-
-    try:
-        supabase.table("highlights").upsert(
-            {
-                "user_key": user_key,
-                "document_id": doc_id,
-                "payload": highlights,
-            },
-            on_conflict="user_key,document_id",
-        ).execute()
+        store = read_store()
+        store[doc_id] = highlights
+        write_store(store)
         return True
     except Exception as e:
-        st.error(f"Não consegui salvar os destaques no Supabase: {e}")
+        st.error(f"Não consegui salvar os destaques no arquivo local: {e}")
         return False
 
 
-# ---------------------------
-# Login simples
-# ---------------------------
-
-st.title("📚 Leitor Med")
-st.caption("Biblioteca pessoal de ebooks em HTML com destaques salvos em nuvem.")
-
-app_password = get_secret("APP_PASSWORD")
-user_key = get_secret("USER_KEY", "regiane")
-
-if app_password:
-    if "authenticated" not in st.session_state:
-        st.session_state.authenticated = False
-
-    if not st.session_state.authenticated:
-        with st.form("login_form"):
-            senha = st.text_input("Senha do app", type="password")
-            entrar = st.form_submit_button("Entrar")
-        if entrar and senha == app_password:
-            st.session_state.authenticated = True
-            st.rerun()
-        elif entrar:
-            st.error("Senha incorreta.")
-        st.stop()
-
-else:
-    st.info("Senha do app não configurada. Para proteger o acesso, configure APP_PASSWORD nos Secrets do Streamlit.")
+def all_highlights_payload() -> Dict[str, Any]:
+    store = read_store()
+    return {
+        "app": "ebook-internato",
+        "storage": "local-json",
+        "highlights_by_document": store,
+    }
 
 
-# ---------------------------
-# Sidebar
-# ---------------------------
+st.title("📚 Ebook Internato")
+st.caption("Biblioteca de ebooks em HTML com destaques salvos em arquivo local do app.")
+
+st.info(
+    "Versão simplificada: sem senha, sem usuário e sem Supabase. "
+    "Os destaques são gravados no arquivo `data/highlights_store.json` dentro do app."
+)
 
 with st.sidebar:
     st.header("Biblioteca")
@@ -194,23 +147,27 @@ with st.sidebar:
     st.code(doc_id)
 
     st.divider()
-    st.caption("Dicas")
+    st.caption("Como destacar")
     st.markdown(
         """
         1. Selecione um trecho do texto.
         2. Clique em **Destacar seleção**.
         3. Para apagar, clique no destaque e use **Apagar selecionado**.
-        4. Os destaques são salvos no Supabase.
+        4. Os destaques são salvos automaticamente no app.
         """
     )
 
-
-# ---------------------------
-# Leitor
-# ---------------------------
+    st.divider()
+    st.caption("Backup")
+    st.download_button(
+        "Baixar todos os destaques",
+        data=json.dumps(all_highlights_payload(), ensure_ascii=False, indent=2),
+        file_name="backup_todos_os_destaques.json",
+        mime="application/json",
+    )
 
 html_content = read_html(ebook_path)
-initial_highlights = load_highlights(doc_id, user_key)
+initial_highlights = load_highlights(doc_id)
 
 col1, col2 = st.columns([0.72, 0.28], gap="large")
 
@@ -230,7 +187,7 @@ with col1:
         highlights = component_value.get("highlights", [])
 
         if event in {"changed", "delete_all", "delete_selected"}:
-            if save_highlights(doc_id, user_key, highlights):
+            if save_highlights(doc_id, highlights):
                 st.toast("Destaques salvos.", icon="✅")
                 st.session_state[f"last_highlights_{doc_id}"] = highlights
 
@@ -258,11 +215,14 @@ with col2:
             "highlights": highlights_for_panel,
         }
         st.download_button(
-            "Baixar JSON dos destaques",
+            "Baixar JSON deste ebook",
             data=json.dumps(export_payload, ensure_ascii=False, indent=2),
             file_name=f"{ebook_path.stem}_destaques.json",
             mime="application/json",
         )
 
 st.divider()
-st.caption("Evite renomear ou mover um HTML depois de começar a destacar, pois os destaques ficam vinculados ao caminho do arquivo.")
+st.caption(
+    "Observação: no Streamlit Community Cloud, arquivos gravados pelo app podem ser perdidos em reinicializações, "
+    "redeploys ou atualizações do repositório. Use o botão de backup se quiser guardar uma cópia dos destaques."
+)

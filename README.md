@@ -1,109 +1,43 @@
-# Leitor Med — Streamlit + HTML + Destaques em Nuvem
+# Ebook Internato
 
-Este projeto cria uma biblioteca pessoal de ebooks médicos em HTML, organizada por áreas, com destaque de trechos e salvamento em nuvem via Supabase.
+App em Streamlit para ler ebooks em HTML e destacar trechos.
 
-## Estrutura
+## Esta versão
 
-```text
-app.py
-requirements.txt
-database_supabase.sql
-.streamlit/
-  config.toml
-  secrets.toml.example
-components/
-  highlight_reader/
-    index.html
-ebooks/
-  pediatria/
-    PED 1 - Neonatologia I.html
-    PED 1 - Neonatologia II.html
-    PED 2 - Aleitamento Materno.html
-    ...
-  clinica_medica/
-  ginecologia_obstetricia/
-  cirurgia/
-  preventiva/
-tools/
-  corrigir_todos_html.py
-```
+Esta versão foi simplificada:
 
-## Como colocar novos ebooks
+- não usa senha;
+- não usa usuário;
+- não usa Supabase;
+- salva os destaques em `data/highlights_store.json`.
 
-Coloque os arquivos `.html` dentro da pasta da área correspondente.
+## Como publicar no Streamlit
 
-Exemplos:
+No Streamlit Community Cloud, configure:
+
+- Repository: `leandro-cine/ebooks-internato`
+- Branch: `main`
+- Main file path: `app.py`
+
+Não precisa preencher Secrets.
+
+## Como adicionar ebooks
+
+Coloque arquivos `.html` dentro de uma pasta de área em `ebooks/`.
+
+Exemplo:
 
 ```text
-ebooks/pediatria/Meu Ebook.html
+ebooks/pediatria/PED 1 - Neonatologia I.html
 ebooks/clinica_medica/Cardiologia.html
-ebooks/ginecologia_obstetricia/Pré-natal.html
 ```
 
-Evite renomear/mover um HTML depois que começar a destacar, pois os destaques ficam vinculados ao caminho do arquivo.
+O app lista automaticamente as áreas e os ebooks.
 
-## Rodar localmente
+## Importante sobre os destaques
 
-```bash
-pip install -r requirements.txt
-streamlit run app.py
-```
+Os destaques são salvos em `data/highlights_store.json` no ambiente onde o app está rodando.
 
-Para testar com Supabase localmente, crie o arquivo:
+No Streamlit Community Cloud, esse arquivo pode ser apagado quando o app reiniciar, quando você fizer redeploy ou quando atualizar o repositório. Por isso, o app tem botão para baixar backup dos destaques.
 
-```text
-.streamlit/secrets.toml
-```
-
-com:
-
-```toml
-APP_PASSWORD = "sua-senha"
-USER_KEY = "regiane"
-
-SUPABASE_URL = "https://SEU-PROJETO.supabase.co"
-SUPABASE_KEY = "SUA-CHAVE"
-```
-
-## Criar banco no Supabase
-
-1. Acesse seu projeto no Supabase.
-2. Vá em **SQL Editor**.
-3. Cole o conteúdo de `database_supabase.sql`.
-4. Clique em **Run**.
-
-## Publicar no Streamlit Community Cloud
-
-1. Suba este projeto para o GitHub.
-2. Acesse o Streamlit Community Cloud.
-3. Clique em **Create app**.
-4. Escolha o repositório.
-5. Em **Main file path**, coloque:
-
-```text
-app.py
-```
-
-6. Em **Settings > Secrets**, cole:
-
-```toml
-APP_PASSWORD = "sua-senha"
-USER_KEY = "regiane"
-
-SUPABASE_URL = "https://SEU-PROJETO.supabase.co"
-SUPABASE_KEY = "SUA-CHAVE"
-```
-
-## Como usar
-
-1. Abra o app.
-2. Digite a senha.
-3. Escolha a área.
-4. Escolha o ebook.
-5. Selecione um trecho.
-6. Clique em **Destacar seleção**.
-7. O destaque será salvo no Supabase e aparecerá em outros dispositivos.
-
-## Observação
-
-Esta versão salva os destaques por posição de texto. Se o HTML for muito alterado depois, os destaques podem deslocar.
+Para sincronização permanente entre dispositivos, o ideal continua sendo usar um banco externo, mas esta versão removeu essa etapa para simplificar.
